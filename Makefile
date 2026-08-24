@@ -2,7 +2,7 @@ INSTALL	:= C:/intelFPGA/QUARTUS_Lite_V23.1
 
 MAIN	:= main.c
 HDRS	:= address_map.h header.h
-SRCS	:= $(MAIN) delete.c playback.c recording.c selection.c 
+SRCS	:= $(MAIN) delete.c playback.c recording.c selection.c logo.c VGA_homescreen.c VGA_audio.c VGA_helpers.c
 
 SHELL	:= cmd.exe
 

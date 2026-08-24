@@ -71,6 +71,15 @@ void deleteRecording()
     selected_from_head = 1;
     *LEDR_ptr = selected_from_head;
     selected_recording = list_of_recordings.head;
+
+
+    // Update sidebar selection
+    draw_sidebar();
+    wait_for_vsync();
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1);
+    draw_sidebar();
+
+
 }
 
 

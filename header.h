@@ -2,25 +2,81 @@
 #ifndef HEADER_H
 #define HEADER_H
 
-
-
-#define ONE_SEC 8000 // The default value the array adds on to when on resize & helps with audio array instantialization
-#define TURN_ON_ALL_LEDS (-1) // Used to turn on all of LEDs
-
-#define UPARROW_CODE 0x48 // Non-ascii code for the up-arrow key
-#define DOWNARROW_CODE 0x50 // Non-ascii code for the down-arrow key
-#define DELETE_CODE 0x53 // Non-ascii code for the delete key
-#define SPACEBAR_CODE 0x20 // Ascii key of the space bar
-
-#include <stdio.h> // Used for debugging
+// LIBRARIES -----------------------------------------------------------------------------------------------
+#include <stdio.h> // Used for sprintf
 #include <stdbool.h>
 #include "address_map.h"
 #include <stdlib.h>
+#include <stdint.h> // For VGA stuff
 
 #include <assert.h> // Good for edge cases testing
 
 
-// STRUCT DEFINITIONS************************************************************************************
+
+// BACKEND DEFINES -----------------------------------------------------------------------------------------------
+#define ONE_SEC 8000 // The default value the array adds on to when on resize & helps with audio array instantialization
+#define VGA_SEC_UPDATE 2000 // How many seconds we should update waveform in
+#define TURN_ON_ALL_LEDS (-1) // Used to turn on all of LEDs
+#define UPARROW_CODE 0x75 // Non-ascii code for the up-arrow key
+#define DOWNARROW_CODE 0x72 // Non-ascii code for the down-arrow key
+#define DELETE_CODE 0x66 // Non-ascii code for the delete key: Backspace*
+#define SPACEBAR_CODE 0x29 // Ascii key of the space bar
+#define R_CODE 0x2D
+
+
+#define PS2_IRQ_NUM   7
+#define PS2_IRQ_MASK  (1 << PS2_IRQ_NUM)
+
+
+// FRONTEND DEFINES -----------------------------------------------------------------------------------------------
+// WAVEFORM
+
+// SCREEN
+#define SCREEN_WIDTH 320
+#define SCREEN_HEIGHT 240
+
+#define SIDEBAR_X0 0
+#define SIDEBAR_X1 75
+
+#define WAVE_X0 76
+#define WAVE_X1 319
+#define WAVE_Y0 0
+#define WAVE_Y1 210
+#define WAVE_Y_CENTRE ((WAVE_Y1-WAVE_Y0)/2)                                     
+#define PIXEL_WAVE_WIDTH 2
+
+#define STATUS_X0 0
+#define STATUS_X1 319
+#define STATUS_Y0 211
+#define STATUS_Y1 239
+
+#define BORDER_Y 210
+#define BORDER_X 75
+#define BORDER_THICK 2
+
+#define PROG_X0 82
+#define PROG_X1 254
+#define PROG_Y0 223
+#define PROG_Y1 232
+#define PROG_SEGMENTS 9
+#define PROG_GAP 4
+
+#define NUM_SLOTS 8
+#define HIGHLIGHT 0x7BEF
+
+// COLOURS
+#define BLACK 0x0000
+#define WHITE 0xFFFF
+#define RED 0xF800
+#define BLUE 0x001F
+#define GREEN 0x07E0
+#define LIGHT_GRAY 0xC618
+
+
+
+
+
+// STRUCT DEFINITIONS -----------------------------------------------------------------------------------------------
 
 // This is a struct which holds the left and right data audio, booleans to differentiate between different states, int id, and a pointer
 // to the next recording
@@ -30,6 +86,8 @@ typedef struct Recording
     int playback_sample;
     // This is the sample we have stopped on when the recording
     int stopped_sample; 
+    // This value is unique for every recording
+    int id;
 
     // A pointer to the recording: Ideally, in cpp, this would be a vector
     int *audio_l;
@@ -60,9 +118,9 @@ struct audio_t
     volatile unsigned int rdata; //4 bytes of right data
 };
 
-// RECORDING FILE
+// RECORDING FILE -----------------------------------------------------------------------------------------------
 
-// handler for when we press key 'r'
+// for when we press key 'r'
 void recording();
 
 // Resize array helper: While we are recording, if the array is too small, we resize it: Making it a dynamic array.
@@ -85,26 +143,101 @@ void playback();
 // Returns true if we have pressed the space bar on the ps2 keyboard
 bool spacebarKeyCheck();
 
-// SELECTION FILE
+// SELECTION FILE -----------------------------------------------------------------------------------------------
 
 // Handler functions
 void downArrowHandler();
+void upArrowHandler();
 
-// DELETE FILE
+// DELETE FILE -----------------------------------------------------------------------------------------------
 
 // Delete the recording and make the current selected recording to head as default
 void deleteRecording();
 
-// EXTERN VARIABLE DECLARATIONS 
+
+// VGA_HOMESCREEN FILE -----------------------------------------------------------------------------------------------
+
+void homescreen(); // Displays the homescreen: Polls until spacebar is pressed
+void draw_logo(int x_start, int y_start); // Draws the logo of the voice memos app
+
+// Helpers (reusable)
+void clear_text();
+
+// VGA_AUDIO FILE -------------------------------------------------------------------------------------------------------
+
+void setUpVGA();
+void setUpDoubleBuffering();
+void draw_layout();
+void draw_sidebar();
+void draw_sidebar_plain();
+void draw_status_bar(int visual_index);
+
+
+void draw_wave(Recording* recording, int visual_index);
+void draw_wave_playback(int visual_index);
+int amp(int s);
+
+
+
+
+void plot_pixel(int x, int y, short int colour);
+void clear_screen(short int colour, bool draw_frame);
+void draw_char(int x, int y, char c);
+void draw_text(int x, int y, const char *text);
+void draw_hline(int x0, int x1, int y, short int colour);
+void draw_vline(int x, int y0, int y1, short int colour);
+void fill_rect(int x0, int y0, int x1, int y1, short int colour);
+void draw_line(int x0, int y0, int x1, int y1, short int colour);
+
+void wait_for_vsync();
+void audio_init();
+
+// EXTERN VARIABLE DECLARATIONS  -----------------------------------------------------------------------------------------------
+
 extern struct audio_t* audiop; // Set up pointer to be aligned with audio base
 extern volatile int *LEDR_ptr; // Load the data reg of the LEDs onto the register
 extern volatile int *KEY_ptr; // Load the base for the keys onto a volatile pointer
+extern volatile int *PS2_ptr; // Load the base for the ps2 for keyboard purposes
 
 extern bool is_recording; // Are we currently recording?
 extern bool is_playingback; // Are we currently playing back audio?
+extern int global_recording_counter;
+
+extern volatile bool r_key_pressed;
+extern volatile bool up_key_pressed;
+extern volatile bool down_key_pressed;
+extern volatile bool del_key_pressed;
+extern volatile bool space_key_pressed;
+
+extern volatile bool saw_f0_breakcode;
 
 extern RecordingList list_of_recordings; // This is the linked list holding all our recordings
 extern Recording* selected_recording; // This points to the recording we are currently selecting to
 extern int selected_from_head; // The ranking of the selected recording relative to the list
+
+// VGA externs
+extern const uint8_t logo_map[];
+extern volatile int pixel_buffer_start;
+extern volatile int *pixel_ctrl_ptr;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #endif

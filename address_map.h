@@ -19,6 +19,11 @@
 #define FPGA_CHAR_BASE			0x09000000
 #define FPGA_CHAR_END			0x09001FFF
 
+
+/* VGA STUFF */
+#define VGA_PIXEL_BUF 0x08000000
+#define VGA_CHAR_BUF 0x09000000
+
 /* Cyclone V FPGA devices */
 #define LED_BASE			0xFF200000
 #define LEDR_BASE			0xFF200000

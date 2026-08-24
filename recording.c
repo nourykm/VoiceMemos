@@ -11,13 +11,28 @@ void recording()
     is_recording = true;
 
     // 1. Allocate new recording & arrays and add it to end of linked list
+    global_recording_counter++;
     Recording* record = createRecordingHelper();
     
     // 2. While r key isnt pressed & there is something to read, store the audio
     int increment = 0;
     *LEDR_ptr = TURN_ON_ALL_LEDS; // To indicate we are recording
     
-    while (!rKeyCheck())   // While we have not pressed r
+    // Clean VGA: Both buffers
+    fill_rect(WAVE_X0, WAVE_Y0, WAVE_X1, WAVE_Y1, BLACK);
+    draw_status_bar(0);
+    draw_layout();
+    draw_sidebar();
+    wait_for_vsync();
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1);
+    
+    fill_rect(WAVE_X0, WAVE_Y0, WAVE_X1, WAVE_Y1, BLACK);
+    draw_status_bar(0);
+    draw_sidebar();
+
+
+    
+    while (!r_key_pressed)   // While we have not pressed the key or the keyboard interrupt didn't change the state
     {
         if (audiop->rarc > 0 && audiop->ralc > 0) //is there something to read in both sides? if not wait --> assume if this is true then we can write)
         {
@@ -27,12 +42,22 @@ void recording()
             // Store what you hear in the array and increment
             record->audio_l[increment] = audiop->ldata;
             record->audio_r[increment] = audiop->rdata;
+            if (increment % VGA_SEC_UPDATE == 0) // Only update once every while
+            {
+                // prev_sample = (increment>0) ? record->audio_l[increment - 1] : 0; // If out of bounds
+                // draw_live_recording(increment, record->audio_l[increment], prev_sample);
+                draw_wave(record, increment);
+                wait_for_vsync();
+                pixel_buffer_start = *(pixel_ctrl_ptr + 1);
+            }
+
             increment++;
         }
     }
 
     // We have exited the loop ie we have stopped recording
     is_recording = false;
+    r_key_pressed = false;
     *LEDR_ptr = 0; // To indicate have finished recording
     record->stopped_sample = increment; // Save the sample index we stopped on: Used for playback
     *LEDR_ptr = selected_from_head; // Start showing the selected recording again
@@ -50,6 +75,7 @@ Recording* createRecordingHelper()
     record->size = ONE_SEC * 3; // Start with 3 seconds: Add more later if needed
     record->audio_l = (int*) calloc(ONE_SEC*3, sizeof(int)); // Creates an array in memory where it is instantialized to 0
     record->audio_r = (int*) calloc(ONE_SEC*3, sizeof(int));
+    record->id = global_recording_counter; // Set its unique id
     
     assert (record->audio_l != NULL && record->audio_r != NULL); // Safety precaution: There is no memory space for audio 
 
@@ -72,16 +98,67 @@ Recording* createRecordingHelper()
 }
 
 
-// Checks if key 0 was pressed
+// Checks if key r was pressed
 bool rKeyCheck()
 {
-    // if key 0 was pressed
-    if ((*(KEY_ptr + 3)&0b1) != 0)
+    while (1)
     {
-        *(KEY_ptr + 3) = 0b1111; // Reset edge capture
+        // Read the data by popping the value in the FIFO
+        int ps2_val = *PS2_ptr;
+
+        // Check if 15th bit (RVALID) is true
+        bool RVALID = ((ps2_val)>>15) & 0b1;
+        if (!RVALID) {break;} // If not valid, we have finished the sequence
+
+        // 1. Retrieve 8 bits of data without reading the data register: Important so we dont trigger a pop in the FIFO
+        unsigned char data = (ps2_val) & 0xFF; 
+
+
+        if (data == 0xFA || data == 0xAA || data == 0xE0) 
+        {
+            continue;   // ignore startup / ACK bytes
+        }
+
+        // 2. Check if the breakcode have gotten read
+        else if (data == 0xF0)
+        {
+            saw_f0_breakcode = true; // We have seen the break code, wait for release
+        }
+        // 3. If the f0 breakcode was seen, check for each respective call: R, spacebar
+        else if (saw_f0_breakcode && data == R_CODE) // 0x2D: 'r'
+        {
+            saw_f0_breakcode = false;
+            
+            r_key_pressed = true;
+
+        }
+        else if (saw_f0_breakcode && data == SPACEBAR_CODE)
+        {
+            saw_f0_breakcode = false;
+        }
+        else if (saw_f0_breakcode && data == UPARROW_CODE)
+        {
+            saw_f0_breakcode = false;
+        }
+        else if (saw_f0_breakcode && data == DOWNARROW_CODE)
+        {
+            saw_f0_breakcode = false;
+        }
+        else if (saw_f0_breakcode  && data == DELETE_CODE)
+        {
+            saw_f0_breakcode = false;
+        }
+        else
+        {
+            // Unrecognized byte or unsupported key sequence
+            saw_f0_breakcode = false;
+        }
+    }
+    if (r_key_pressed == true) 
+    {
+        r_key_pressed = false;
         return true;
     }
-    // Other wise, we have not pressed the letter r
     return false;
 }
 
@@ -109,5 +186,6 @@ void resizeArrayHelper(Recording* record)
     record->audio_l = arr_l;
     record->audio_r = arr_r;
 }
+
 
 
